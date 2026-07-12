@@ -1,0 +1,136 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.preprocessing import StandardScaler
+import warnings
+warnings.filterwarnings('ignore')
+
+
+def load_and_analyze_data():
+    """Complete lung cancer data analysis"""
+
+    # Load data
+    df = pd.read_csv('lung_cancer.csv')
+
+    # Basic dataset info
+    print("LUNG CANCER DATA ANALYSIS")
+    print("=" * 50)
+    print(f"Dataset shape: {df.shape[0]} rows, {df.shape[1]} columns")
+    print(f"High risk cases: {df['lung_cancer_risk'].sum()}")
+    print(f"Risk rate: {df['lung_cancer_risk'].mean():.1%}")
+    print()
+
+    # Correlation analysis
+    print("CORRELATION ANALYSIS")
+    print("-" * 30)
+    correlation_matrix = df.corr()
+    target_correlations = correlation_matrix['lung_cancer_risk'].abs().sort_values(ascending=False)
+
+    print("Top 10 features correlated with lung cancer risk:")
+    for i, (feature, corr) in enumerate(target_correlations.head(11)[1:].items(), 1):
+        print(f"{i:2d}. {feature:<25} {corr:.3f}")
+    print()
+
+    # Create correlation heatmap
+    plt.figure(figsize=(16, 12))
+    sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', center=0,
+                square=True, fmt='.2f', cbar_kws={'shrink': 0.8})
+    plt.title('Correlation Matrix Heatmap', fontsize=16, fontweight='bold')
+    plt.tight_layout()
+    plt.savefig('correlation_heatmap.png', dpi=300, bbox_inches='tight')
+    plt.close()
+
+    X = df.drop('lung_cancer_risk', axis=1)
+    y = df['lung_cancer_risk']
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+    # Simple linear regression with most correlated feature
+    most_correlated_feature = target_correlations.index[1]
+    X_single = X_train[[most_correlated_feature]]
+    X_single_test = X_test[[most_correlated_feature]]
+
+    lr_single = LinearRegression()
+    lr_single.fit(X_single, y_train)
+    y_pred_single = lr_single.predict(X_single_test)
+
+    single_r2 = r2_score(y_test, y_pred_single)
+    single_mse = mean_squared_error(y_test, y_pred_single)
+
+    print(f"Simple Linear Regression ({most_correlated_feature}):")
+    print(f"  RÂ² Score: {single_r2:.4f}")
+    print(f"  MSE: {single_mse:.4f}")
+    print(f"  Coefficient: {lr_single.coef_[0]:.4f}")
+    print(f"  Intercept: {lr_single.intercept_:.4f}")
+    print()
+
+    scaler = StandardScaler()
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_test_scaled = scaler.transform(X_test)
+
+    lr_multiple = LinearRegression()
+    lr_multiple.fit(X_train_scaled, y_train)
+    y_pred_multiple = lr_multiple.predict(X_test_scaled)
+
+    multiple_r2 = r2_score(y_test, y_pred_multiple)
+    multiple_mse = mean_squared_error(y_test, y_pred_multiple)
+
+    print("Multiple Linear Regression:")
+    print(f"  RÂ² Score: {multiple_r2:.4f}")
+    print(f"  MSE: {multiple_mse:.4f}")
+    print(f"  Improvement: {(multiple_r2 - single_r2):.4f}")
+    print()
+
+    # Feature importance
+    feature_importance = pd.DataFrame({
+        'Feature': X.columns,
+        'Coefficient': lr_multiple.coef_
+    })
+    feature_importance['Abs_Coefficient'] = abs(feature_importance['Coefficient'])
+    feature_importance = feature_importance.sort_values('Abs_Coefficient', ascending=False)
+
+    print("Top 10 Most Important Features:")
+    for i, row in feature_importance.head(10).iterrows():
+        print(f"{row.name+1:2d}. {row['Feature']:<25} {row['Coefficient']:8.4f}")
+    print()
+
+    # Visualization of predictions
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+
+    # Simple regression plot
+    ax1.scatter(y_test, y_pred_single, alpha=0.7)
+    ax1.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'r--', lw=2)
+    ax1.set_xlabel('Actual Values')
+    ax1.set_ylabel('Predicted Values')
+    ax1.set_title(f'Simple Linear Regression\n({most_correlated_feature})')
+    ax1.grid(True, alpha=0.3)
+
+    # Multiple regression plot
+    ax2.scatter(y_test, y_pred_multiple, alpha=0.7)
+    ax2.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'r--', lw=2)
+    ax2.set_xlabel('Actual Values')
+    ax2.set_ylabel('Predicted Values')
+    ax2.set_title('Multiple Linear Regression')
+    ax2.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig('regression_comparison.png', dpi=300, bbox_inches='tight')
+    plt.close()
+
+    # Risk group analysis
+    print("RISK GROUP ANALYSIS")
+    print("-" * 30)
+    high_risk = df[df['lung_cancer_risk'] == 1]
+    low_risk = df[df['lung_cancer_risk'] == 0]
+    print(f"High risk patients: {len(high_risk)}")
+    print(f"Low risk patients:  {len(low_risk)}")
+    print(f"Mean age        - High: {high_risk['age'].mean():5.1f}   Low: {low_risk['age'].mean():5.1f}")
+    print(f"Mean pack years - High: {high_risk['pack_years'].mean():5.1f}   Low: {low_risk['pack_years'].mean():5.1f}")
+    print(f"X-ray abnormal  - High: {high_risk['xray_abnormal'].mean():5.1%}   Low: {low_risk['xray_abnormal'].mean():5.1%}")
+
+
+if __name__ == '__main__':
+    load_and_analyze_data()
